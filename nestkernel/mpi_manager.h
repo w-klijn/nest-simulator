@@ -59,7 +59,6 @@ class MPIManager : public ManagerInterface
 public:
   // forward declaration of internal classes
   class OffGridSpike;
-  class NodeAddressingData;
 
   MPIManager();
   ~MPIManager()
@@ -73,6 +72,15 @@ public:
   virtual void get_status( DictionaryDatum& );
 
   void init_mpi( int* argc, char** argv[] );
+#ifdef HAVE_MPI
+  void set_communicator( MPI_Comm );
+
+  MPI_Comm
+  get_communicator()
+  {
+    return comm;
+  };
+#endif
 
   /**
    * Return the number of processes used during simulation.
@@ -116,6 +124,11 @@ public:
    */
   void mpi_abort( int exitcode );
 
+  /*
+   * gather all send_buffer vectors on other mpi process to recv_buffer
+   * vector
+   */
+  void communicate( std::vector< long >& send_buffer, std::vector< long >& recv_buffer );
 
   void communicate( std::vector< unsigned int >& send_buffer,
     std::vector< unsigned int >& recv_buffer,
@@ -152,24 +165,6 @@ public:
    * Maximum across all ranks
    */
   void communicate_Allreduce_max_in_place( std::vector< long >& buffer );
-
-  /**
-   * Collect GIDs for all nodes in a given node list across processes.
-   * The NodeListType should be one of LocalNodeList, LocalLeafList,
-   * LocalChildList.
-   */
-  template < typename NodeListType >
-  void
-  communicate( const NodeListType& local_nodes, std::vector< NodeAddressingData >& all_nodes, bool remote = false );
-
-  template < typename NodeListType >
-  void communicate( const NodeListType& local_nodes,
-    std::vector< NodeAddressingData >& all_nodes,
-    DictionaryDatum params,
-    bool remote = false );
-
-  // TODO: not used...
-  void communicate_connector_properties( DictionaryDatum& dict );
 
   std::string get_processor_name();
 
@@ -220,10 +215,6 @@ public:
   void communicate_secondary_events_Alltoall( std::vector< D >& send_buffer, std::vector< D >& recv_buffer );
 
   void synchronize();
-
-  // TODO: not used...
-  void test_link( int, int );
-  void test_links();
 
   bool grng_synchrony( unsigned long );
   bool any_true( const bool );
@@ -308,12 +299,8 @@ private:
   std::vector< int > comm_step_;
   unsigned int COMM_OVERFLOW_ERROR;
 
-//! Variable to hold the MPI communicator to use (the datatype matters).
-#ifdef HAVE_MUSIC
-  MPI::Intracomm comm;
-#else  /* #ifdef HAVE_MUSIC */
+  //! Variable to hold the MPI communicator to use (the datatype matters).
   MPI_Comm comm;
-#endif /* #ifdef HAVE_MUSIC */
   MPI_Datatype MPI_OFFGRID_SPIKE;
 
   void communicate_Allgather( std::vector< unsigned int >& send_buffer,
@@ -401,52 +388,6 @@ public:
       OffGridSpike ogs( maxgid, 0.0 );
       assert( maxgid == ogs.get_gid() );
     }
-  };
-
-  class NodeAddressingData
-  {
-  public:
-    NodeAddressingData()
-      : gid_( 0 )
-      , parent_gid_( 0 )
-      , vp_( 0 )
-    {
-    }
-    NodeAddressingData( unsigned int gid, unsigned int parent_gid, unsigned int vp )
-      : gid_( gid )
-      , parent_gid_( parent_gid )
-      , vp_( vp )
-    {
-    }
-
-    unsigned int
-    get_gid() const
-    {
-      return gid_;
-    }
-    unsigned int
-    get_parent_gid() const
-    {
-      return parent_gid_;
-    }
-    unsigned int
-    get_vp() const
-    {
-      return vp_;
-    }
-    bool operator<( const NodeAddressingData& other ) const
-    {
-      return this->gid_ < other.gid_;
-    }
-    bool operator==( const NodeAddressingData& other ) const
-    {
-      return this->gid_ == other.gid_;
-    }
-
-  private:
-    unsigned int gid_;        //!< GID of neuron
-    unsigned int parent_gid_; //!< GID of neuron's parent
-    unsigned int vp_;         //!< virtual process of neuron
   };
 };
 
@@ -641,11 +582,6 @@ MPIManager::communicate( std::vector< int >& )
 
 inline void
 MPIManager::communicate( std::vector< long >& )
-{
-}
-
-inline void
-MPIManager::communicate_connector_properties( DictionaryDatum& )
 {
 }
 

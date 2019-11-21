@@ -47,7 +47,6 @@ References
 import nest
 import pylab as pl
 import numpy
-import random
 
 n_neuron = 500
 gap_per_neuron = 60
@@ -66,7 +65,7 @@ nest.ResetKernel()
 # First we set the random seed, adjust the kernel settings and create
 # ``hh_psc_alpha_gap`` neurons, ``spike_detector`` and ``poisson_generator``.
 
-random.seed(1)
+numpy.random.seed(1)
 
 nest.SetKernelStatus({'resolution': 0.05,
                       'total_num_virtual_procs': threads,
@@ -82,8 +81,7 @@ nest.SetKernelStatus({'resolution': 0.05,
 
 neurons = nest.Create('hh_psc_alpha_gap', n_neuron)
 
-sd = nest.Create("spike_detector", params={'to_file': False,
-                                           'to_memory': True})
+sd = nest.Create("spike_detector")
 pg = nest.Create("poisson_generator", params={'rate': 500.0})
 
 ###############################################################################
@@ -96,18 +94,19 @@ pg = nest.Create("poisson_generator", params={'rate': 500.0})
 
 conn_dict = {'rule': 'fixed_indegree',
              'indegree': inh_per_neuron,
-             'autapses': False,
-             'multapses': True}
+             'allow_autapses': False,
+             'allow_multapses': True}
 
-syn_dict = {'model': 'static_synapse',
+syn_dict = {'synapse_model': 'static_synapse',
             'weight': j_inh,
             'delay': delay}
 
 nest.Connect(neurons, neurons, conn_dict, syn_dict)
 
-nest.Connect(pg, neurons, 'all_to_all', syn_spec={'model': 'static_synapse',
-                                                  'weight': j_exc,
-                                                  'delay': delay})
+nest.Connect(pg, neurons, 'all_to_all',
+             syn_spec={'synapse_model': 'static_synapse',
+                       'weight': j_exc,
+                       'delay': delay})
 
 ###############################################################################
 # Then the neurons are connected to the ``spike_detector`` and the initial
@@ -115,8 +114,7 @@ nest.Connect(pg, neurons, 'all_to_all', syn_spec={'model': 'static_synapse',
 
 nest.Connect(neurons, sd)
 
-for i in range(n_neuron):
-    nest.SetStatus([neurons[i]], {'V_m': (-40. - 40. * random.random())})
+neurons.V_m = nest.random.uniform(min=-80., max=-40.)
 
 #######################################################################################
 # Finally gap junctions are added to the network. :math:`(60*500)/2` ``gap_junction``
@@ -130,21 +128,23 @@ for i in range(n_neuron):
 # using the ``make_symmetric`` flag for ``one_to_one`` connections.
 
 n_connection = int(n_neuron * gap_per_neuron / 2)
-connections = numpy.transpose(
-    [random.sample(neurons, 2) for _ in range(n_connection)])
+neuron_list = neurons.tolist()
+connections = numpy.random.choice(neuron_list, [n_connection, 2])
 
-nest.Connect(connections[0], connections[1],
-             {'rule': 'one_to_one', 'make_symmetric': True},
-             {'model': 'gap_junction', 'weight': gap_weight})
+for source_gid, target_gid in connections:
+    nest.Connect(nest.GIDCollection([source_gid]),
+                 nest.GIDCollection([target_gid]),
+                 {'rule': 'one_to_one', 'make_symmetric': True},
+                 {'synapse_model': 'gap_junction', 'weight': gap_weight})
 
 ###############################################################################
 # In the end we start the simulation and plot the spike pattern.
 
 nest.Simulate(simtime)
 
-times = nest.GetStatus(sd, 'events')[0]['times']
-spikes = nest.GetStatus(sd, 'events')[0]['senders']
-n_spikes = nest.GetStatus(sd, 'n_events')[0]
+times = sd.get('events', 'times')
+spikes = sd.get('events', 'senders')
+n_spikes = sd.get('n_events')
 
 hz_rate = (1000.0 * n_spikes / simtime) / n_neuron
 

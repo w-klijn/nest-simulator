@@ -32,7 +32,7 @@ __all__ = [
     'from_device',
     'from_file',
     'from_file_numpy',
-    'frim_file_pandas',
+    'from_file_pandas',
     'show',
     'savefig',
 ]
@@ -141,7 +141,7 @@ def from_file_pandas(fname, **kwargs):
     data = None
     for f in fname:
         dataFrame = pandas.read_csv(
-            f, sep='\s+', lineterminator='\n',
+            f, sep=r'\s+', lineterminator='\n',
             header=None, index_col=None,
             skipinitialspace=True)
         newdata = dataFrame.values
@@ -168,7 +168,7 @@ def from_file_numpy(fname, **kwargs):
     return from_data(data, **kwargs)
 
 
-def from_device(detec, plot_lid=False, **kwargs):
+def from_device(detec, **kwargs):
     """
     Plot raster from a spike detector.
 
@@ -176,8 +176,6 @@ def from_device(detec, plot_lid=False, **kwargs):
     ----------
     detec : TYPE
         Description
-    plot_lid : bool, optional
-        Whether to convert from local IDs
     kwargs:
         Parameters passed to _make_plot
 
@@ -186,41 +184,38 @@ def from_device(detec, plot_lid=False, **kwargs):
     nest.kernel.NESTError
     """
 
-    type_id = nest.GetDefaults(nest.GetStatus(detec, 'model')[0], 'type_id')
-    if not type_id.name == "spike_detector":
+    type_id = nest.GetDefaults(detec.get('model'), 'type_id')
+    if not type_id == "spike_detector":
         raise nest.kernel.NESTError("Please provide a spike_detector.")
 
-    if nest.GetStatus(detec, "to_memory")[0]:
+    if detec.get('record_to') == "memory":
 
         ts, gids = _from_memory(detec)
 
         if not len(ts):
             raise nest.kernel.NESTError("No events recorded!")
 
-        if plot_lid:
-            gids = [nest.hl_api.GetLID([x]) for x in gids]
-
         if "title" not in kwargs:
-            kwargs["title"] = "Raster plot from device '%i'" % detec[0]
+            kwargs["title"] = "Raster plot from device '%i'" % detec.get('global_id')
 
-        if nest.GetStatus(detec)[0]["time_in_steps"]:
+        if detec.get('time_in_steps'):
             xlabel = "Steps"
         else:
             xlabel = "Time (ms)"
 
         return _make_plot(ts, ts, gids, gids, xlabel=xlabel, **kwargs)
 
-    elif nest.GetStatus(detec, "to_file")[0]:
-        fname = nest.GetStatus(detec, "filenames")[0]
+    elif detec.get("record_to") == "ascii":
+        fname = detec.get("filenames")
         return from_file(fname, **kwargs)
 
     else:
-        raise nest.kernel.NESTError("No data to plot. Make sure that \
-            either to_memory or to_file are set.")
+        raise nest.NESTError("No data to plot. Make sure that \
+            record_to is set to either 'ascii' or 'memory'.")
 
 
 def _from_memory(detec):
-    ev = nest.GetStatus(detec, "events")[0]
+    ev = detec.get("events")
     return ev["times"], ev["senders"]
 
 

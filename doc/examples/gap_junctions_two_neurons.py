@@ -43,17 +43,14 @@ nest.SetKernelStatus({'resolution': 0.05})
 
 neuron = nest.Create('hh_psc_alpha_gap', 2)
 
-vm = nest.Create('voltmeter', params={'to_file': False,
-                                      'withgid': True,
-                                      'withtime': True,
-                                      'interval': 0.1})
+vm = nest.Create('voltmeter', params={'interval': 0.1})
 
 ###############################################################################
 # Then we set the constant current input, modify the inital membrane
 # potential of one of the neurons and connect the neurons to the ``voltmeter``.
 
 nest.SetStatus(neuron, {'I_e': 100.})
-nest.SetStatus([neuron[0]], {'V_m': -10.})
+nest.SetStatus(neuron[0], {'V_m': -10.})
 
 nest.Connect(vm, neuron, 'all_to_all')
 
@@ -64,7 +61,7 @@ nest.Connect(vm, neuron, 'all_to_all')
 # `neuron[0]`:
 
 nest.Connect(neuron, neuron,
-             {'rule': 'all_to_all', 'autapses': False},
+             {'rule': 'all_to_all', 'allow_autapses': False},
              {'model': 'gap_junction', 'weight': 0.5})
 
 ###############################################################################

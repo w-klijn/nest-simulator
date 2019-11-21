@@ -26,10 +26,13 @@
 // C++ includes:
 #include <cassert>
 #include <map>
-#include <vector>
 
 // Includes from nestkernel:
 #include "nest_types.h"
+
+// Includes from libnestutil
+#include "block_vector.h"
+
 
 namespace nest
 {
@@ -57,6 +60,7 @@ class SparseNodeArray
 public:
   struct NodeEntry
   {
+    NodeEntry() = default;
     NodeEntry( Node&, index );
 
     // Accessor functions here are mostly in place to make things "look nice".
@@ -70,7 +74,7 @@ public:
     index gid_; //!< store gid locally for faster searching
   };
 
-  typedef std::vector< SparseNodeArray::NodeEntry >::const_iterator const_iterator;
+  typedef BlockVector< SparseNodeArray::NodeEntry >::const_iterator const_iterator;
 
   //! Create empty spare node array
   SparseNodeArray();
@@ -81,14 +85,8 @@ public:
    */
   size_t size() const;
 
-  //! Reserve space for given number of elements
-  void reserve( size_t );
-
   //! Clear the array
   void clear();
-
-  //! Return maximum size of underlying vector
-  size_t max_size() const;
 
   /**
    * Add single local node.
@@ -96,23 +94,20 @@ public:
   void add_local_node( Node& );
 
   /**
-   * Register non-local node.
+   * Set max gid to max in network.
    *
    * Ensures that array knows about non-local nodes
    * with GIDs higher than highest local GID.
    */
-  void add_remote_node( index );
+  void update_max_gid( index );
 
   /**
    *  Lookup node based on GID
    *
    *  Returns 0 if GID is not local.
-   *  For local nodes with siblings, it returns the pointer
-   *  to the sibling container.
-   *  The caller is responsible for (i) providing proper
-   *  proxy node pointers for non-local nodes and (ii)
-   *  selecting the correct sibling for a given thread for
-   *  nodes that are sibling containers.
+   *
+   *  The caller is responsible for providing proper
+   *  proxy node pointers for non-local nodes
    *
    *  @see get_node_by_index()
    */
@@ -139,15 +134,12 @@ public:
    */
   index get_max_gid() const;
 
-  std::map< long, size_t > get_step_ctr() const;
-
 private:
-  std::vector< NodeEntry > nodes_;            //!< stores local node information
-  index max_gid_;                             //!< largest GID in network
-  index local_min_gid_;                       //!< smallest local GID
-  index local_max_gid_;                       //!< largest local GID
-  double gid_idx_scale_;                      //!< interpolation factor
-  mutable std::map< long, size_t > step_ctr_; //!< for analysis, measure misses
+  BlockVector< NodeEntry > nodes_; //!< stores local node information
+  index max_gid_;                  //!< largest GID in network
+  index local_min_gid_;            //!< smallest local GID
+  index local_max_gid_;            //!< largest local GID
+  double gid_idx_scale_;           //!< interpolation factor
 };
 
 } // namespace nest
@@ -178,13 +170,6 @@ nest::SparseNodeArray::clear()
   local_min_gid_ = 0;
   local_max_gid_ = 0;
   gid_idx_scale_ = 1.;
-  step_ctr_.clear();
-}
-
-inline size_t
-nest::SparseNodeArray::max_size() const
-{
-  return nodes_.max_size();
 }
 
 inline nest::Node*
@@ -198,12 +183,6 @@ inline nest::index
 nest::SparseNodeArray::get_max_gid() const
 {
   return max_gid_;
-}
-
-inline std::map< long, size_t >
-nest::SparseNodeArray::get_step_ctr() const
-{
-  return step_ctr_;
 }
 
 inline nest::Node*
